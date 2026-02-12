@@ -52,7 +52,29 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+                # 1) Bewaar dims van elke laag: input -> hidden(s) -> output
+        dims = [n_inputs] + list(n_hidden) + [n_classes]
+
+        # 2) Maak een lijst van modules (lagen)
+        self.layers = []
+        for i in range(len(dims) - 1):
+            fan_in  = dims[i]
+            fan_out = dims[i + 1]
+
+            # Linear laag
+            self.layers.append(LinearModule(fan_in, fan_out, weight_init="kaiming"))
+            # ^ als jouw LinearModule geen weight_init argument heeft:
+            #   zorg dat LinearModule intern Kaiming doet, of geef W,b mee.
+
+            # Activatie NA elke hidden linear laag, niet na de laatste (output) laag
+            if i < len(dims) - 2:
+                self.layers.append(ELUModule())
+
+        # (optioneel) Loss module (als je die als onderdeel van het model wil)
+        self.loss = CrossEntropyModule()
+
+        # (optioneel) cache / grads containers (alleen als jouw framework dit verwacht)
+        self.cache = {}
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -74,7 +96,10 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        out = x
 
+        for layer in self.layers:
+            out = layer.forward(out)
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -95,10 +120,13 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        dx = dout
+        for layer in reversed(self.layers):
+            dx = layer.backward(dx)
         #######################
         # END OF YOUR CODE    #
         #######################
+        return dx
 
     def clear_cache(self):
         """
@@ -108,11 +136,11 @@ class MLP(object):
         TODO:
         Iterate over modules and call the 'clear_cache' function.
         """
-        
+
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        self.cache = None
         #######################
         # END OF YOUR CODE    #
         #######################

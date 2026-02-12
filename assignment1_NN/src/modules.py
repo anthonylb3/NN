@@ -50,25 +50,24 @@ class LinearModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        fan_in = in_features
+        fan_in  = in_features
         fan_out = out_features
 
-        if input_layer:
-            # Xavier initialization
-            std = np.sqrt(2.0 / (fan_in + fan_out))
-        else:
-            # Kaiming initialization (for ReLU layers)
-            std = np.sqrt(2.0 / fan_in)
+        # Kaiming init (voor ELU/ReLU-achtige activaties)
+        std = np.sqrt(2.0 / fan_in)
 
-        # Initialize weights
+        # weights: (fan_out, fan_in)
         self.params['weight'] = np.random.randn(fan_out, fan_in) * std
 
-        # Initialize biases
-        self.params['bias'] = np.zeros((fan_out, 1))
+        # bias: (fan_out,)  (BELANGRIJK)
+        self.params['bias'] = np.zeros(fan_out)
 
-        # Initialize gradients
-        self.grads['weight'] = np.zeros((fan_out, fan_in))
-        self.grads['bias'] = np.zeros((fan_out, 1))
+        # grads zelfde shapes
+        self.grads['weight'] = np.zeros_like(self.params['weight'])
+        self.grads['bias']   = np.zeros_like(self.params['bias'])
+
+        # cache voor backward
+        self.cache = None
 
         #######################
         # END OF YOUR CODE    #
@@ -93,9 +92,11 @@ class LinearModule(object):
         # PUT YOUR CODE HERE  #
         #######################
         self.cache = x
-        W = self.params['weight']
-        b = self.params['bias']
-        out = W @ x + b
+        W = self.params['weight']   # (fan_out, fan_in)
+        b = self.params['bias']     # (fan_out,)
+
+        out = x @ W.T + b           # (N, fan_out)
+
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -118,17 +119,12 @@ class LinearModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        x = self.cache  # input from forward pass
-        W = self.params['weight']
+        x = self.cache              # (N, in)
+        W = self.params['weight']   # (out, in)
 
-        # Gradient w.r.t weights
-        self.grads['weight'] = dout @ x.T
-
-        # Gradient w.r.t bias
-        self.grads['bias'] = np.sum(dout, axis=1, keepdims=True)
-
-        # Gradient w.r.t input (to pass to previous layer)
-        dx = W.T @ dout
+        self.grads['weight'] = dout.T @ x          # (out, in)
+        self.grads['bias']   = np.sum(dout, axis=0)  # (out,)
+        dx = dout @ W                               # (N, in)
 
         #######################
         # END OF YOUR CODE    #
@@ -337,16 +333,9 @@ class CrossEntropyModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        eps = 1e-12  # voorkomt log(0)
-        x_clipped = np.clip(x, eps, 1.0)
-
-        # cache opslaan als je wil (handig)
-        self.cache = (x_clipped, y)
-
-        # cross-entropy per sample, dan mean over batch
-        loss_per_sample = -np.sum(y * np.log(x_clipped), axis=0)  # shape (N,)
-        out = np.mean(loss_per_sample)
-
+        x_clipped = np.clip(x, 1e-12, 1.0)
+        N = x.shape[0]
+        out = -np.mean(np.log(x_clipped[np.arange(N), y]))
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -369,11 +358,11 @@ class CrossEntropyModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        eps = 1e-12
-        x_clipped = np.clip(x, eps, 1.0)
+        x_clipped = np.clip(x, 1e-12, 1.0)
+        N, C = x_clipped.shape
 
-        N = x.shape[1]  # batch_size
-        dx = -(y / x_clipped) / N
+        dx = np.zeros_like(x_clipped)
+        dx[np.arange(N), y] = -1.0 / (N * x_clipped[np.arange(N), y])
 
         #######################
         # END OF YOUR CODE    #
