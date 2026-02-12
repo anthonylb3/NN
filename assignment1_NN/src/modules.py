@@ -35,7 +35,7 @@ class LinearModule(object):
           input_layer: boolean, True if this is the first layer after the input, else False.
 
         TODO:
-        Initialize weight parameters using Kaiming initialization. 
+        Initialize weight parameters using Kaiming initialization.
         Initialize biases with zeros.
         Hint: the input_layer argument might be needed for the initialization
 
@@ -50,6 +50,25 @@ class LinearModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        fan_in = in_features
+        fan_out = out_features
+
+        if input_layer:
+            # Xavier initialization
+            std = np.sqrt(2.0 / (fan_in + fan_out))
+        else:
+            # Kaiming initialization (for ReLU layers)
+            std = np.sqrt(2.0 / fan_in)
+
+        # Initialize weights
+        self.params['weight'] = np.random.randn(fan_out, fan_in) * std
+
+        # Initialize biases
+        self.params['bias'] = np.zeros((fan_out, 1))
+
+        # Initialize gradients
+        self.grads['weight'] = np.zeros((fan_out, fan_in))
+        self.grads['bias'] = np.zeros((fan_out, 1))
 
         #######################
         # END OF YOUR CODE    #
@@ -73,11 +92,13 @@ class LinearModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        self.cache = x
+        W = self.params['weight']
+        b = self.params['bias']
+        out = W @ x + b
         #######################
         # END OF YOUR CODE    #
         #######################
-
         return out
 
     def backward(self, dout):
@@ -97,6 +118,17 @@ class LinearModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        x = self.cache  # input from forward pass
+        W = self.params['weight']
+
+        # Gradient w.r.t weights
+        self.grads['weight'] = dout @ x.T
+
+        # Gradient w.r.t bias
+        self.grads['bias'] = np.sum(dout, axis=1, keepdims=True)
+
+        # Gradient w.r.t input (to pass to previous layer)
+        dx = W.T @ dout
 
         #######################
         # END OF YOUR CODE    #
@@ -114,7 +146,7 @@ class LinearModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        self.cache = None
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -139,14 +171,20 @@ class ELUModule(object):
 
         TODO:
         Implement forward pass of the module.
-        
+
         Hint: You can store intermediate variables inside the object. They can be used in backward pass computation.
         """
-        
+
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        self.cache = x  # store for backward pass
 
+        out = np.where(
+            x > 0,
+            x,
+            self.alpha * (np.exp(x) - 1)
+        )
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -168,7 +206,15 @@ class ELUModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        x = self.cache
 
+        dx_local = np.where(
+                  x > 0,
+                  1,
+                  self.alpha * np.exp(x)
+        )
+
+        dx = dout * dx_local
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -185,7 +231,7 @@ class ELUModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        self.cache = None
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -214,6 +260,14 @@ class SoftMaxModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        # Max trick for numerical stability (per column / per sample)
+        x_shift = x - np.max(x, axis=0, keepdims=True)
+
+        exp_x = np.exp(x_shift)
+        out = exp_x / np.sum(exp_x, axis=0, keepdims=True)
+
+        # store for backward
+        self.cache = out
 
         #######################
         # END OF YOUR CODE    #
@@ -236,7 +290,9 @@ class SoftMaxModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        s = self.cache  # softmax output (C, N)
+        dot = np.sum(dout * s, axis=0, keepdims=True)  # (1, N)
+        dx = s * (dout - dot)
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -254,7 +310,7 @@ class SoftMaxModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        self.cache = None
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -281,6 +337,15 @@ class CrossEntropyModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        eps = 1e-12  # voorkomt log(0)
+        x_clipped = np.clip(x, eps, 1.0)
+
+        # cache opslaan als je wil (handig)
+        self.cache = (x_clipped, y)
+
+        # cross-entropy per sample, dan mean over batch
+        loss_per_sample = -np.sum(y * np.log(x_clipped), axis=0)  # shape (N,)
+        out = np.mean(loss_per_sample)
 
         #######################
         # END OF YOUR CODE    #
@@ -304,6 +369,11 @@ class CrossEntropyModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        eps = 1e-12
+        x_clipped = np.clip(x, eps, 1.0)
+
+        N = x.shape[1]  # batch_size
+        dx = -(y / x_clipped) / N
 
         #######################
         # END OF YOUR CODE    #
