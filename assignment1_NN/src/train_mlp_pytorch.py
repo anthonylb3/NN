@@ -277,6 +277,7 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
         "seed": seed,
         "device": str(device),
     }
+    print(logging_dict)
 
     #######################
     # END OF YOUR CODE    #
