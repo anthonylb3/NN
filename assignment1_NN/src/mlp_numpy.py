@@ -52,29 +52,23 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-                # 1) Bewaar dims van elke laag: input -> hidden(s) -> output
-        dims = [n_inputs] + list(n_hidden) + [n_classes]
-
-        # 2) Maak een lijst van modules (lagen)
         self.layers = []
+
+        dims = [n_inputs] + n_hidden + [n_classes]
+
+        # Linear + ELU stack
         for i in range(len(dims) - 1):
-            fan_in  = dims[i]
-            fan_out = dims[i + 1]
+            self.layers.append(
+                LinearModule(dims[i], dims[i+1], input_layer=(i == 0))
+            )
 
-            # Linear laag
-            self.layers.append(LinearModule(fan_in, fan_out, weight_init="kaiming"))
-            # ^ als jouw LinearModule geen weight_init argument heeft:
-            #   zorg dat LinearModule intern Kaiming doet, of geef W,b mee.
-
-            # Activatie NA elke hidden linear laag, niet na de laatste (output) laag
             if i < len(dims) - 2:
-                self.layers.append(ELUModule())
+                self.layers.append(ELUModule(alpha=1.0))
 
-        # (optioneel) Loss module (als je die als onderdeel van het model wil)
+        # Output layers
+        self.layers.append(SoftMaxModule())
         self.loss = CrossEntropyModule()
 
-        # (optioneel) cache / grads containers (alleen als jouw framework dit verwacht)
-        self.cache = {}
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -128,6 +122,12 @@ class MLP(object):
         #######################
         return dx
 
+    def step(self, lr):
+        for layer in self.layers:
+            if hasattr(layer, "params"):
+                layer.params["weight"] -= lr * layer.grads["weight"]
+                layer.params["bias"]   -= lr * layer.grads["bias"]
+
     def clear_cache(self):
         """
         Remove any saved tensors for the backward pass from any module.
@@ -140,7 +140,8 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        self.cache = None
+        for layer in self.layers:
+            layer.clear_cache()
         #######################
         # END OF YOUR CODE    #
         #######################

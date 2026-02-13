@@ -256,13 +256,9 @@ class SoftMaxModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        # Max trick for numerical stability (per column / per sample)
-        x_shift = x - np.max(x, axis=0, keepdims=True)
-
+        x_shift = x - np.max(x, axis=1, keepdims=True)     # axis=1
         exp_x = np.exp(x_shift)
-        out = exp_x / np.sum(exp_x, axis=0, keepdims=True)
-
-        # store for backward
+        out = exp_x / np.sum(exp_x, axis=1, keepdims=True) # axis=1
         self.cache = out
 
         #######################
@@ -286,8 +282,8 @@ class SoftMaxModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        s = self.cache  # softmax output (C, N)
-        dot = np.sum(dout * s, axis=0, keepdims=True)  # (1, N)
+        s = self.cache  # (N, C)
+        dot = np.sum(dout * s, axis=1, keepdims=True)  # (N,1)
         dx = s * (dout - dot)
         #######################
         # END OF YOUR CODE    #

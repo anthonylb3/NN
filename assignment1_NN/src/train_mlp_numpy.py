@@ -53,7 +53,14 @@ def accuracy(predictions, targets):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    # stap 1: pak de voorspelde class (index van grootste logit)
+    pred_classes = np.argmax(predictions, axis=1)
 
+    # stap 2: vergelijk met echte labels (True/False array)
+    correct = pred_classes == targets
+
+    # stap 3: gemiddelde nemen (True = 1, False = 0)
+    accuracy = np.mean(correct)
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -81,7 +88,26 @@ def evaluate_model(model, data_loader):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    total_correct = 0
+    total_samples = 0
 
+    for inputs, targets in data_loader:
+
+        # forward pass
+        outputs = model.forward(inputs)
+
+        # predicted classes
+        pred_classes = np.argmax(outputs, axis=1)
+
+        # aantal correcte voorspellingen in deze batch
+        correct = np.sum(pred_classes == targets)
+
+        # update totals
+        total_correct += correct
+        total_samples += targets.shape[0]
+
+    # gemiddelde accuracy over hele dataset
+    avg_accuracy = total_correct / total_samples
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -125,24 +151,83 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    ## Loading the dataset
     cifar10 = cifar10_utils.get_cifar10(data_dir)
-    cifar10_loader = cifar10_utils.get_dataloader(cifar10, batch_size=batch_size,
-                                                  return_numpy=True)
+    loaders = cifar10_utils.get_dataloader(cifar10, batch_size=batch_size, return_numpy=True)
 
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
+    train_loader = loaders["train"]
+    val_loader   = loaders["validation"]   # <-- FIX
+    test_loader  = loaders["test"]
 
-    # TODO: Initialize model and loss module
-    model = ...
-    loss_module = ...
-    # TODO: Training loop including validation
-    val_accuracies = ...
-    # TODO: Test best model
-    test_accuracy = ...
-    # TODO: Add any information you might want to save for plotting
-    logging_dict = ...
+    model = MLP(n_inputs=32*32*3, n_hidden=hidden_dims, n_classes=10)
+    loss_module = CrossEntropyModule()
+
+    # --- save/restore best weights (no deepcopy) ---
+    def get_model_state(m):
+        state = []
+        for layer in m.layers:  # pas aan als jouw lijst anders heet
+            if hasattr(layer, "W") and hasattr(layer, "b"):
+                state.append((layer.W.copy(), layer.b.copy()))
+            else:
+                state.append(None)
+        return state
+
+    def set_model_state(m, state):
+        for layer, saved in zip(m.layers, state):
+            if saved is None:
+                continue
+            W, b = saved
+            layer.W = W.copy()
+            layer.b = b.copy()
+
+    train_losses = []
+    val_accuracies = []
+    best_val_acc = -1.0
+    best_state = None
+
+    for epoch in range(epochs):
+        epoch_loss_sum = 0.0
+        epoch_num_samples = 0
+
+        for X, y in train_loader:
+            # flatten if needed
+            if X.ndim > 2:
+                X = X.reshape(X.shape[0], -1)
+
+            logits = model.forward(X)
+            loss = loss_module.forward(logits, y)
+
+            dlogits = loss_module.backward(logits, y)
+            model.backward(dlogits)
+            model.step(lr)
+
+            bs = y.shape[0]
+            epoch_loss_sum += float(loss) * bs
+            epoch_num_samples += bs
+
+        avg_train_loss = epoch_loss_sum / epoch_num_samples
+        train_losses.append(avg_train_loss)
+
+        val_acc = evaluate_model(model, val_loader)
+        val_accuracies.append(val_acc)
+
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            best_state = get_model_state(model)
+
+        print(f"Epoch {epoch+1}/{epochs} | train_loss={avg_train_loss:.4f} | val_acc={val_acc:.4f}")
+
+    # load best weights
+    if best_state is not None:
+        set_model_state(model, best_state)
+
+    test_accuracy = evaluate_model(model, test_loader)
+
+    logging_dict = {
+        "train_losses": train_losses,
+        "val_accuracies": val_accuracies,
+        "best_val_accuracy": best_val_acc,
+        "test_accuracy": test_accuracy,
+    }
     #######################
     # END OF YOUR CODE    #
     #######################

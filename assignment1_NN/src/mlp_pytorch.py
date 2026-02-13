@@ -52,14 +52,38 @@ class MLP(nn.Module):
         Implement module setup of the network.
         The linear layer have to initialized according to the Kaiming initialization.
         Add the Batch-Normalization _only_ is use_batch_norm is True.
-        
+
         Hint: No softmax layer is needed here. Look at the CrossEntropyLoss module for loss calculation.
         """
 
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        super().__init__()
+
+        layers = []
+        dims = [n_inputs] + list(n_hidden) + [n_classes]
+
+        for i in range(len(dims) - 1):
+            in_f, out_f = dims[i], dims[i + 1]
+
+            lin = nn.Linear(in_f, out_f, bias=True)
+
+            # Kaiming / He init (werkt goed voor ReLU-achtige activaties; voor ELU gebruiken we dit ook vaak)
+            nn.init.kaiming_normal_(lin.weight, mode="fan_in", nonlinearity="relu")
+            nn.init.zeros_(lin.bias)
+
+            layers.append(lin)
+
+            # Alleen hidden blokken: (Linear -> (BatchNorm) -> ELU)
+            if i < len(dims) - 2:
+                if use_batch_norm:
+                    layers.append(nn.BatchNorm1d(out_f))
+                layers.append(nn.ELU())
+
+        # Sequential = “ketting” van lagen die automatisch achter elkaar draait
+        self.net = nn.Sequential(*layers)
+
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -81,7 +105,7 @@ class MLP(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        out = self.net(x)
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -94,4 +118,4 @@ class MLP(nn.Module):
         Returns the device on which the model is. Can be useful in some situations.
         """
         return next(self.parameters()).device
-    
+

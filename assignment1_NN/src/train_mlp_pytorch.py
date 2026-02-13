@@ -38,7 +38,7 @@ def accuracy(predictions, targets):
     """
     Computes the prediction accuracy, i.e. the average of correct predictions
     of the network.
-    
+
     Args:
       predictions: 2D float array of size [batch_size, n_classes], predictions of the model (logits)
       llabels: 1D int array of size [batch_size]. Ground truth labels for
@@ -46,7 +46,7 @@ def accuracy(predictions, targets):
     Returns:
       accuracy: scalar float, the accuracy of predictions,
                 i.e. the average correct predictions over the whole batch
-    
+
     TODO:
     Implement accuracy computation.
     """
@@ -54,11 +54,19 @@ def accuracy(predictions, targets):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    # Stap 1: voorspelde klasse = index van hoogste logit
+    preds = predictions.argmax(dim=1)
+
+    # Stap 2: vergelijk met targets
+    correct = (preds == targets)
+
+    # Stap 3: gemiddelde nemen (float)
+    accuracy = correct.float().mean().item()
 
     #######################
     # END OF YOUR CODE    #
     #######################
-    
+
     return accuracy
 
 
@@ -75,18 +83,32 @@ def evaluate_model(model, data_loader):
     TODO:
     Implement evaluation of the MLP model on a given dataset.
 
-    Hint: make sure to return the average accuracy of the whole dataset, 
+    Hint: make sure to return the average accuracy of the whole dataset,
           independent of batch sizes (not all batches might be the same size).
     """
 
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    model.eval()  # zet model in evaluation mode (belangrijk voor BatchNorm)
 
+    total_correct = 0
+    total_samples = 0
+
+    with torch.no_grad():  # geen gradients nodig tijdens evaluatie
+        for inputs, targets in data_loader:
+            outputs = model(inputs)
+
+            preds = outputs.argmax(dim=1)
+
+            total_correct += (preds == targets).sum().item()
+            total_samples += targets.size(0)
+
+    avg_accuracy = total_correct / total_samples
     #######################
     # END OF YOUR CODE    #
     #######################
-    
+
     return avg_accuracy
 
 
@@ -106,15 +128,15 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
       model: An instance of 'MLP', the trained model that performed best on the validation set.
       val_accuracies: A list of scalar floats, containing the accuracies of the model on the
                       validation set per epoch (element 0 - performance after epoch 1)
-      test_accuracy: scalar float, average accuracy on the test dataset of the model that 
+      test_accuracy: scalar float, average accuracy on the test dataset of the model that
                      performed best on the validation.
-      logging_dict: An arbitrary object containing logging information. This is for you to 
+      logging_dict: An arbitrary object containing logging information. This is for you to
                     decide what to put in here.
 
     TODO:
-    - Implement the training of the MLP model. 
+    - Implement the training of the MLP model.
     - Evaluate your model on the whole validation set each epoch.
-    - After finishing training, evaluate your model that performed best on the validation set, 
+    - After finishing training, evaluate your model that performed best on the validation set,
       on the whole test dataset.
     - Integrate _all_ input arguments of this function in your training. You are allowed to add
       additional input argument if you assign it a default value that represents the plain training
@@ -143,17 +165,119 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    # --- Get train/val/test loaders (works if returned as tuple or dict) ---
+    train_loader = cifar10_loader["train"]
+    val_loader   = cifar10_loader.get("val", None)
+    test_loader  = cifar10_loader["test"]
+
+    if val_loader is None:
+        val_loader = test_loader
+
 
     # TODO: Initialize model and loss module
-    model = ...
-    loss_module = ...
-    # TODO: Training loop including validation
+    n_inputs = 3 * 32 * 32
+    n_classes = 10
+
+    model = MLP(n_inputs=n_inputs, n_hidden=hidden_dims, n_classes=n_classes,
+                use_batch_norm=use_batch_norm).to(device)
+    loss_module = nn.CrossEntropyLoss()
+
     # TODO: Do optimization with the simple SGD optimizer
-    val_accuracies = ...
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+    val_accuracies = []
+    # TODO: Training loop including validation
+    train_losses = []
+
+    best_val_acc = -1.0
+    best_epoch = -1
+    best_model = deepcopy(model)
+
+    for epoch in range(epochs):
+        model.train()
+
+        running_loss = 0.0
+        n_seen = 0
+
+        for inputs, targets in train_loader:
+            inputs = inputs.to(device)
+            targets = targets.to(device)
+
+            # CIFAR10 images -> flatten to vectors
+            inputs = inputs.view(inputs.size(0), -1)
+
+            optimizer.zero_grad()
+
+            logits = model(inputs)
+            loss = loss_module(logits, targets)
+
+            loss.backward()
+            optimizer.step()
+
+            bs = targets.size(0)
+            running_loss += loss.item() * bs
+            n_seen += bs
+
+        avg_train_loss = running_loss / max(1, n_seen)
+        train_losses.append(avg_train_loss)
+
+        # --- Validation accuracy on full validation set (size-weighted) ---
+        model.eval()
+        total_correct = 0
+        total_samples = 0
+        with torch.no_grad():
+            for inputs, targets in val_loader:
+                inputs = inputs.to(device)
+                targets = targets.to(device)
+                inputs = inputs.view(inputs.size(0), -1)
+
+                logits = model(inputs)
+                preds = logits.argmax(dim=1)
+
+                total_correct += (preds == targets).sum().item()
+                total_samples += targets.size(0)
+
+        val_acc = total_correct / max(1, total_samples)
+        val_accuracies.append(val_acc)
+
+        # --- Save best model (by validation accuracy) ---
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            best_epoch = epoch
+            best_model = deepcopy(model)
+
     # TODO: Test best model
-    test_accuracy = ...
+    best_model.eval()
+    total_correct = 0
+    total_samples = 0
+    with torch.no_grad():
+        for inputs, targets in test_loader:
+            inputs = inputs.to(device)
+            targets = targets.to(device)
+            inputs = inputs.view(inputs.size(0), -1)
+
+            logits = best_model(inputs)
+            preds = logits.argmax(dim=1)
+
+            total_correct += (preds == targets).sum().item()
+            total_samples += targets.size(0)
+
+    test_accuracy = total_correct / max(1, total_samples)
+
     # TODO: Add any information you might want to save for plotting
-    logging_dict = ...
+    # --- Logging (you can add more if you want) ---
+    logging_dict = {
+        "train_losses": train_losses,
+        "val_accuracies": val_accuracies,
+        "best_val_accuracy": best_val_acc,
+        "best_epoch": best_epoch,
+        "lr": lr,
+        "batch_size": batch_size,
+        "hidden_dims": hidden_dims,
+        "use_batch_norm": use_batch_norm,
+        "seed": seed,
+        "device": str(device),
+    }
+
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -164,13 +288,13 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
 if __name__ == '__main__':
     # Command line arguments
     parser = argparse.ArgumentParser()
-    
+
     # Model hyperparameters
     parser.add_argument('--hidden_dims', default=[128], type=int, nargs='+',
                         help='Hidden dimensionalities to use inside the network. To specify multiple, use " " to separate them. Example: "256 128"')
     parser.add_argument('--use_batch_norm', action='store_true',
                         help='Use this option to add Batch Normalization layers to the MLP.')
-    
+
     # Optimizer hyperparameters
     parser.add_argument('--lr', default=0.1, type=float,
                         help='Learning rate to use')
@@ -190,4 +314,3 @@ if __name__ == '__main__':
 
     train(**kwargs)
     # Feel free to add any additional functions, such as plotting of the loss curve here
-    
