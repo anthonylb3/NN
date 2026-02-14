@@ -32,6 +32,7 @@ import cifar10_utils
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
 
 
 def accuracy(predictions, targets):
@@ -167,7 +168,7 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
     #######################
     # --- Get train/val/test loaders (works if returned as tuple or dict) ---
     train_loader = cifar10_loader["train"]
-    val_loader   = cifar10_loader.get("val", None)
+    val_loader   = cifar10_loader["validation"]
     test_loader  = cifar10_loader["test"]
 
     if val_loader is None:
@@ -183,7 +184,7 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
     loss_module = nn.CrossEntropyLoss()
 
     # TODO: Do optimization with the simple SGD optimizer
-    optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+    optimizer = optim.SGD(model.parameters(), lr=lr)
     val_accuracies = []
     # TODO: Training loop including validation
     train_losses = []
@@ -277,7 +278,6 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
         "seed": seed,
         "device": str(device),
     }
-    print(logging_dict)
 
     #######################
     # END OF YOUR CODE    #
@@ -303,7 +303,7 @@ if __name__ == '__main__':
                         help='Minibatch size')
 
     # Other hyperparameters
-    parser.add_argument('--epochs', default=10, type=int,
+    parser.add_argument('--epochs', default=5, type=int,
                         help='Max number of epochs')
     parser.add_argument('--seed', default=42, type=int,
                         help='Seed to use for reproducing results')
@@ -313,5 +313,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     kwargs = vars(args)
 
-    train(**kwargs)
+    model, val_accuracies, test_accuracy, logging_dict = train(**kwargs)
+    torch.save(model.state_dict(), "best_model.pth")
+    print(logging_dict)
+
     # Feel free to add any additional functions, such as plotting of the loss curve here
