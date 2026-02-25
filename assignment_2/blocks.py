@@ -16,14 +16,14 @@ def w2_sigmoid_forward(x_input):
     return output
 
 def w2_sigmoid_grad_input(x_input, grad_output):
-    """sigmoid nonlinearity gradient. 
-        Calculate the partial derivative of the loss 
+    """sigmoid nonlinearity gradient.
+        Calculate the partial derivative of the loss
         with respect to the input of the layer
     # Arguments
         x_input: np.array of size `(n_objects, n_in)`
             grad_output: np.array of size `(n_objects, n_in)`
     # Output
-        the partial derivative of the loss 
+        the partial derivative of the loss
         with respect to the input of the function
         np.array of size `(n_objects, n_in)`
     """
@@ -59,7 +59,7 @@ def w2_nll_grad_input(target_pred, target_true):
         target_pred: predictions - np.array of size `(n_objects, 1)`
         target_true: ground truth - np.array of size `(n_objects, 1)`
     # Output
-        the partial derivative 
+        the partial derivative
         of NLL with respect to its input
         np.array of size `(n_objects, 1)`
     """
